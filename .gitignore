@@ -3,6 +3,7 @@ __pycache__/
 *.pyc
 node_modules/
 .DS_Store
+.venv*/
 
 # Role 1 real output — large/derived, regenerate with data/prep.py.
 # fake_sample.csv is NOT ignored: it's the committed handoff for Role 2/3.
