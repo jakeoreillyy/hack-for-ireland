@@ -126,24 +126,24 @@ Each role owns a folder and does not edit another role's folder. The only shared
   applications.parquet     # Role 1: real output, replaces the fake sample when ready
   schema.md                # the data contract below, kept in sync with prep.py
 
-/backend
-  app.py                   # Role 2: FastAPI app, single POST /predict endpoint
-  parsing.py               # Role 2: sentence -> parsed JSON
-  matching.py              # Role 2: query applications.parquet (or fake_sample.csv)
-  alternatives.py          # Role 2: faster-site search (radius stats, candidate grid, ranking)
-  summary.py                # Role 2: numbers -> plain-English summary, no invented figures
-  requirements.txt
+/apps/backend              # Role 2 (Python package, run instructions in README.md)
+  pyproject.toml
+  .env.example             # ANTHROPIC_API_KEY=... (placeholder only, never a real key)
+  src/planning_predictor/
+    main.py  config.py  schemas.py  repository.py
+    api/routes.py          # single POST /predict endpoint
+    services/              # parsing, matching, alternatives, summary, prediction
+  tests/
 
-/frontend
-  (index.html / src/...)   # Role 3
-  mock/response.json       # Role 3: hand-written example matching CONTRACT.md exactly
+/apps/frontend             # Role 3
+  (index.html / src/...)
+  mock/response.json       # hand-written example matching CONTRACT.md exactly
 
 CONTRACT.md                # frozen API request/response shape, see below
-.env.example                # OPENAI_API_KEY=... (placeholder only, never a real key)
-.gitignore                  # .env, __pycache__, node_modules, large data files
+.gitignore                 # .env, __pycache__, node_modules, large data files
 ```
 
-Role 2's `matching.py` should read whichever file exists (`applications.parquet` if present, else `fake_sample.csv`) so it keeps working the moment Role 1 swaps the real data in — no code change needed on handoff.
+Role 2's `repository.py` reads whichever file exists (`applications.parquet` if present, else `fake_sample.csv`) so it keeps working the moment Role 1 swaps the real data in — no code change needed on handoff.
 
 ### Git workflow
 
@@ -169,6 +169,8 @@ One endpoint, `POST /predict`.
 ```
 
 `location` and `max_distance_km` are optional. Without `location` the response has no `site_estimate` or `alternatives` (return `null` and `[]`). `max_distance_km` defaults to 25.
+
+`parsed_override` is also optional: `{ "units": 120, "storeys": 8, "mixed_use": true }`, any field omitted or `null`. The fallback form sends it to skip text parsing, and `description` may then be `""`. Invalid input (e.g. `lat` outside −90 to 90) gets HTTP 422.
 
 **Response**
 
@@ -229,7 +231,10 @@ One endpoint, `POST /predict`.
 }
 ```
 
-- `warnings` is a list of short strings, e.g. `"Only 6 similar applications found — bands widened to show these."` Always present, empty array when there's nothing to flag. This is how Role 2 communicates the small-sample and fallback cases from "Known limits" without changing the response shape.
+- `warnings` is a list of short strings, e.g. `"Small sample: only 6 similar applications."` Always present, empty array when there's nothing to flag. This is how Role 2 communicates the small-sample and fallback cases from "Known limits" without changing the response shape.
+- Nullable fields: `parsed.units` and `parsed.storeys` (not found in the text); every `stats` field except `n_similar` (all `null` when `n_similar` is 0); and in `matches`, `address`, `units`, `storeys`, `decision_date` and `link` (about 15% of applications have no link).
+- `grant_rate` (in `stats`, `site_estimate` and `alternatives`) is the share of decided (granted or refused) applications that were granted. `n_similar` also counts invalid and withdrawn ones, so don't show it as "X% of `n_similar` were granted".
+- `delay_factors` has 0–2 entries (a factor is left out when no similar application has a duration for it), `matches` up to 5 (closest in size first), `alternatives` up to 3 (most weeks saved first).
 - Field names are final. If a name needs to change, update this file first and flag it in chat — Role 3 is coding directly against these keys.
 - Role 3 builds `mock/response.json` as one concrete example of this exact shape and points the UI at it until the real endpoint exists, then swaps the base URL — no other frontend change needed.
 

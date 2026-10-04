@@ -15,6 +15,8 @@ Frozen per `planning-predictor-plan.md` → "Working concurrently" → "API cont
 
 `location` and `max_distance_km` are optional. Without `location` the response has no `site_estimate` or `alternatives` (return `null` and `[]`). `max_distance_km` defaults to 25.
 
+`parsed_override` is also optional: `{ "units": 120, "storeys": 8, "mixed_use": true }`, any field omitted or `null`. The fallback form sends it to skip text parsing, and `description` may then be `""`. Invalid input (e.g. `lat` outside −90 to 90) gets HTTP 422.
+
 ## Response
 
 ```json
@@ -74,5 +76,8 @@ Frozen per `planning-predictor-plan.md` → "Working concurrently" → "API cont
 }
 ```
 
-- `warnings` is always present: a list of short strings (e.g. `"Only 6 similar applications found — bands widened to show these."`), empty array when there's nothing to flag.
-- Field names are final. Role 3 codes directly against these keys in `frontend/mock/response.json`.
+- `warnings` is always present: a list of short strings (e.g. `"Small sample: only 6 similar applications."`), empty array when there's nothing to flag.
+- Nullable fields: `parsed.units` and `parsed.storeys` (not found in the text); every `stats` field except `n_similar` (all `null` when `n_similar` is 0); and in `matches`, `address`, `units`, `storeys`, `decision_date` and `link` (about 15% of applications have no link).
+- `grant_rate` (in `stats`, `site_estimate` and `alternatives`) is the share of decided (granted or refused) applications that were granted. `n_similar` also counts invalid and withdrawn ones, so don't show it as "X% of `n_similar` were granted".
+- `delay_factors` has 0–2 entries (a factor is left out when no similar application has a duration for it), `matches` up to 5 (closest in size first), `alternatives` up to 3 (most weeks saved first).
+- Field names are final. Role 3 codes directly against these keys in `apps/frontend/mock/response.json`. The backend tests check the response's field names against the examples in this file.

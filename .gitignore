@@ -1,11 +1,15 @@
 .env
 __pycache__/
 *.pyc
+*.egg-info/
+.pytest_cache/
+.ruff_cache/
 node_modules/
+dist/
 .DS_Store
 .venv*/
 
-# Role 1 real output — large/derived, regenerate with data/prep.py.
+# Role 1 real output: large/derived, regenerate with data/prep.py.
 # fake_sample.csv is NOT ignored: it's the committed handoff for Role 2/3.
 data/applications.parquet
 data/applications.csv
