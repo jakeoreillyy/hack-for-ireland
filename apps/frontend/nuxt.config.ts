@@ -13,15 +13,16 @@ export default defineNuxtConfig({
     prefix: '',
     componentDir: './app/components/ui',
   },
-  // Server-only. Set in .env; never expose under `public`.
   runtimeConfig: {
-    // Team predictor (hack-for-ireland apps/backend). Empty = use the local snapshot only.
-    predictorUrl: '',
+    public: {
+      // The planning predictor API (apps/backend). Override with NUXT_PUBLIC_API_BASE.
+      apiBase: 'http://127.0.0.1:8000',
+    },
   },
   app: {
     head: {
-      title: 'Precedent · Dublin Planning Explorer',
-      meta: [{ name: 'description', content: 'Explore illustrative planning applications and the evidence behind comparable decisions.' }],
+      title: 'Precedent · Irish planning decisions',
+      meta: [{ name: 'description', content: 'See how similar housing proposals fared in planning, from the national planning register.' }],
     },
   },
   typescript: { strict: true },

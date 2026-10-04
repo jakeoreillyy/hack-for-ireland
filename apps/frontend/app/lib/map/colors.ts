@@ -1,5 +1,3 @@
-import type { Verdict, PlanningStatus, TransportMode } from '~/types/api'
-
 // MapLibre paint properties need concrete colours, and the design tokens may be
 // oklch(), which MapLibre cannot parse. Resolve each token once through a canvas,
 // which normalises any CSS colour to rgb.
@@ -30,35 +28,3 @@ export function token(name: string, fallback = '#64748b'): string {
   return value
 }
 
-/** Call if the theme changes (tokens re-resolved on next read). */
-export function clearTokenCache() {
-  cache.clear()
-}
-
-export const verdictVar: Record<Verdict, string> = {
-  below_market: '--verdict-below',
-  in_line: '--verdict-inline',
-  above_market: '--verdict-above',
-}
-
-export const planningVar: Record<PlanningStatus, string> = {
-  granted: '--planning-granted',
-  pending: '--planning-pending',
-  refused: '--planning-refused',
-  appealed: '--planning-appealed',
-}
-
-export const transportVar: Record<TransportMode, string> = {
-  luas: '--transport-luas',
-  dart: '--transport-dart',
-  rail: '--transport-rail',
-  bus: '--transport-bus',
-}
-
-/** Verdict of a comparable relative to the asking rent (±5% is in line). */
-export function verdictVsAsking(rent: number, asking: number): Verdict {
-  const diff = (rent - asking) / asking
-  if (diff < -0.05) return 'below_market'
-  if (diff > 0.05) return 'above_market'
-  return 'in_line'
-}

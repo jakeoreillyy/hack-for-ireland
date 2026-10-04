@@ -1,20 +1,13 @@
+import { predict, PredictorError } from '~/lib/api/predict'
 import type {
-  Authority, ExplainResponse, ParsedProposal, PlanningCase, PrecedentsResponse,
-} from '~/lib/planning/contract'
+  Authority, ParsedProposal, PlanningCase, PrecedentsResponse, PrecedentStats,
+} from '~/lib/planning/types'
 
-export type PrecedentState = 'idle' | 'parsing' | 'searching' | 'explaining' | 'done' | 'error'
+export type PrecedentState = 'idle' | 'searching' | 'done' | 'error'
 
-export interface SearchParams {
-  authority: Authority
-  homes: number
-  storeys?: number | null
-  mixedUse?: boolean
-}
-
-function errorMessage(error: unknown, fallback: string) {
-  const data = (error as { data?: { error?: { message?: string } } })?.data
-  return data?.error?.message ?? fallback
-}
+/** The cases shown in the list and on the map. */
+const MAX_CASES = 20
+const SITE_REQUEST_FIELDS = { maxMatches: 1 }
 
 /** Council page for a case: the register link, or (Dublin City) resolved via /api/council-link. */
 export async function councilLink(item: PlanningCase): Promise<string | null> {
@@ -27,120 +20,120 @@ export async function councilLink(item: PlanningCase): Promise<string | null> {
   }
 }
 
+export interface SiteState {
+  lng: number
+  lat: number
+  loading: boolean
+  estimate: PrecedentsResponse['siteEstimate']
+  alternatives: PrecedentsResponse['alternatives']
+  warnings: string[]
+  error: string | null
+}
+
 export function usePrecedents() {
-  // Shared across the shell, map and panels (Nuxt useState), like useMapSelection was for RentCheck.
+  const apiBase = useRuntimeConfig().public.apiBase
+  const call = (params: Parameters<typeof predict>[1]) => predict(apiBase, params)
+
+  // Shared across the shell, map and panels (Nuxt useState).
   const state = useState<PrecedentState>('pr:state', () => 'idle')
   const parsed = useState<ParsedProposal | null>('pr:parsed', () => null)
   const result = useState<PrecedentsResponse | null>('pr:result', () => null)
-  const explanation = useState<ExplainResponse | null>('pr:explanation', () => null)
   const error = useState<string | null>('pr:error', () => null)
   /** The case open in the panel and highlighted on the map. */
   const selectedId = useState<string | null>('pr:selected', () => null)
   /** Bumped to ask the map to fly to the selected case. */
   const focusTick = useState<number>('pr:focus', () => 0)
-
-  async function parse(description: string) {
-    state.value = 'parsing'
-    error.value = null
-    try {
-      parsed.value = await $fetch<ParsedProposal>('/api/parse', { method: 'POST', body: { description } })
-      return parsed.value
-    } catch (cause) {
-      state.value = 'error'
-      error.value = errorMessage(cause, 'Could not read the description. Try again.')
-      return null
-    }
-  }
-
-  async function search(params: SearchParams) {
-    state.value = 'searching'
-    error.value = null
-    explanation.value = null
-    try {
-      const query: Record<string, string | number | boolean> = { authority: params.authority, homes: params.homes }
-      if (params.storeys != null) query.storeys = params.storeys
-      if (params.mixedUse != null) query.mixedUse = params.mixedUse
-      result.value = await $fetch<PrecedentsResponse>('/api/precedents', { query })
-      return result.value
-    } catch (cause) {
-      state.value = 'error'
-      error.value = errorMessage(cause, 'Could not load planning applications from the register.')
-      return null
-    }
-  }
-
-  async function explain(response: PrecedentsResponse) {
-    state.value = 'explaining'
-    try {
-      explanation.value = await $fetch<ExplainResponse>('/api/explain', {
-        method: 'POST',
-        body: { proposal: response.proposal, stats: response.stats, cases: response.cases },
-      })
-    } catch {
-      // The figures are already on screen; a missing summary is not fatal.
-      explanation.value = null
-    }
-    state.value = 'done'
-    return explanation.value
-  }
-
-  function caseById(id: string): PlanningCase | undefined {
-    return result.value?.cases.find(item => item.id === id)
-  }
-
   /** The description had no number of homes and none was entered: ask before searching. */
   const needsHomes = useState<boolean>('pr:needs-homes', () => false)
-  const lastRun = useState<{ description: string; authority: Authority; homes: number | null } | null>('pr:last', () => null)
+  const lastRun = useState<{ description: string, authority: Authority, homes: number | null } | null>('pr:last', () => null)
+  const site = useState<SiteState | null>('pr:site', () => null)
+  let siteToken = 0
 
-  /** Parse, search, then explain, in order. `homes` overrides the parsed value. */
+  /**
+   * Search in one call: the backend reads the description, finds similar applications and writes
+   * the summary. `homes` is used only when the description gives no number of homes.
+   */
   async function run(description: string, authority: Authority, homes: number | null = null) {
     lastRun.value = { description, authority, homes }
     needsHomes.value = false
     selectedId.value = null
     result.value = null
-    explanation.value = null
+    error.value = null
     clearSite()
-    const proposal = await parse(description)
-    if (!proposal) return
-    const count = homes || proposal.homes
-    if (!count) {
-      needsHomes.value = true
-      state.value = 'idle'
-      return
+    state.value = 'searching'
+    try {
+      let response = await call({ authority, description, maxMatches: MAX_CASES })
+      const { proposal } = response
+      parsed.value = { homes: proposal.homes, storeys: proposal.storeys, mixedUse: proposal.mixedUse }
+      if (!proposal.homes) {
+        if (!homes) {
+          needsHomes.value = true
+          state.value = 'idle'
+          return
+        }
+        response = await call({ authority, proposal: { ...parsed.value, homes }, maxMatches: MAX_CASES })
+        parsed.value = { ...parsed.value, homes }
+      }
+      result.value = response
+      state.value = 'done'
+    } catch (cause) {
+      state.value = 'error'
+      error.value = cause instanceof PredictorError ? cause.message : 'Something went wrong. Try again.'
     }
-    const response = await search({ authority, homes: count, storeys: proposal.storeys, mixedUse: proposal.mixedUse })
-    if (!response) return
-    await explain(response)
   }
 
-  // "Drop your site": the predictor's estimate within a few km of a point, plus faster nearby areas.
-  const site = useState<{ lng: number; lat: number; loading: boolean; estimate: PrecedentsResponse['siteEstimate']; alternatives: PrecedentsResponse['alternatives']; warnings: string[]; error: string | null } | null>('pr:site', () => null)
-  let siteToken = 0
+  function retry() {
+    if (lastRun.value) return run(lastRun.value.description, lastRun.value.authority, lastRun.value.homes)
+  }
+
+  /** The proposal that produced the current results, as the backend takes it. */
+  function currentProposal(): ParsedProposal | null {
+    const proposal = result.value?.proposal
+    return proposal?.homes ? { homes: proposal.homes, storeys: proposal.storeys, mixedUse: proposal.mixedUse } : null
+  }
+
+  /** "Drop your site": similar applications within a few km of a point, plus faster nearby areas. */
   async function dropSite(lng: number, lat: number) {
-    const r = result.value
-    if (!r?.proposal.homes) return
-    const t = ++siteToken
+    const current = result.value
+    const proposal = currentProposal()
+    if (!current || !proposal) return
+    const token = ++siteToken
     site.value = { lng, lat, loading: true, estimate: null, alternatives: [], warnings: [], error: null }
     try {
-      const query: Record<string, string | number | boolean> = { authority: r.proposal.authority, homes: r.proposal.homes, mixedUse: r.proposal.mixedUse, lat, lon: lng }
-      if (r.proposal.storeys) query.storeys = r.proposal.storeys
-      const res = await $fetch<PrecedentsResponse>('/api/precedents', { query, timeout: 30000 })
-      if (t !== siteToken) return
-      // Only the caveats this spot adds; the search's own warnings are already in the report.
-      const warnings = (res.warnings ?? []).filter(w => !r.warnings?.includes(w))
-      site.value = { lng, lat, loading: false, estimate: res.siteEstimate, alternatives: res.alternatives ?? [], warnings, error: res.siteEstimate ? null : 'No estimate for this spot.' }
+      const response = await call({ authority: current.proposal.authority, proposal, location: { lat, lng }, ...SITE_REQUEST_FIELDS })
+      if (token !== siteToken) return
+      // Only the caveats this spot adds; the search's own warnings are already shown.
+      const warnings = response.warnings.filter(w => !current.warnings.includes(w))
+      site.value = {
+        lng, lat, loading: false, estimate: response.siteEstimate, alternatives: response.alternatives,
+        warnings: response.siteEstimate ? warnings : [],
+        // With no estimate the backend's own reason says why, e.g. no applications nearby.
+        error: response.siteEstimate ? null : (warnings[0] ?? 'No estimate for this spot.'),
+      }
     } catch {
-      if (t !== siteToken) return
+      if (token !== siteToken) return
       site.value = { lng, lat, loading: false, estimate: null, alternatives: [], warnings: [], error: 'The site estimate did not load. Try another spot.' }
     }
   }
+
   function clearSite() {
     siteToken++
     site.value = null
   }
 
-  function retry() {
-    if (lastRun.value) return run(lastRun.value.description, lastRun.value.authority, lastRun.value.homes)
+  /** Headline figures for the same proposal in another council. Null when the request fails. */
+  async function compareWith(authority: Authority): Promise<PrecedentStats | null> {
+    const proposal = currentProposal()
+    if (!proposal) return null
+    try {
+      return (await call({ authority, proposal, ...SITE_REQUEST_FIELDS })).stats
+    } catch {
+      return null
+    }
+  }
+
+  function caseById(id: string): PlanningCase | undefined {
+    return result.value?.cases.find(item => item.id === id)
   }
 
   function selectCase(id: string | null, focus = true) {
@@ -155,9 +148,11 @@ export function usePrecedents() {
     state.value = 'idle'
     parsed.value = null
     result.value = null
-    explanation.value = null
     error.value = null
   }
 
-  return { state, parsed, result, explanation, error, selectedId, focusTick, needsHomes, lastRun, run, retry, site, dropSite, clearSite, parse, search, explain, caseById, selectCase, reset }
+  return {
+    state, parsed, result, error, selectedId, focusTick, needsHomes, lastRun, site,
+    run, retry, dropSite, clearSite, compareWith, caseById, selectCase, reset,
+  }
 }

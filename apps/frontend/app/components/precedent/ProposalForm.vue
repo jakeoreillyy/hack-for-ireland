@@ -3,7 +3,7 @@ import { ChevronDown, Search, TriangleAlert } from '@lucide/vue'
 import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
 import { Label } from '@/components/ui/label'
-import { AUTHORITIES, type Authority } from '~/lib/planning/contract'
+import { AUTHORITIES, type Authority } from '~/lib/planning/types'
 import { AUTHORITY_LABEL, EXAMPLES } from '~/lib/planning/labels'
 
 const pr = usePrecedents()

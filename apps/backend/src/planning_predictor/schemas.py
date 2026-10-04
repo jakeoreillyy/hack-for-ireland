@@ -23,7 +23,8 @@ class PredictRequest(BaseModel):
     council: str
     location: Location | None = None
     max_distance_km: float = Field(default=25, gt=0, le=100)
-    parsed_override: ProjectSpec | None = None  # proposed addition to CONTRACT.md
+    parsed_override: ProjectSpec | None = None
+    max_matches: int = Field(default=5, ge=1, le=25)
 
 
 class Stats(BaseModel):
@@ -67,7 +68,14 @@ class Match(BaseModel):
     units: int | None
     storeys: int | None
     decision: str
+    received_date: str | None
     decision_date: str | None
+    days_to_decision: int | None
+    mixed_use: bool
+    further_information: bool
+    appealed: bool
+    lat: float | None
+    lon: float | None
     link: str | None
 
 

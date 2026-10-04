@@ -1,7 +1,6 @@
-import type { Feature, FeatureCollection, Geometry, Polygon, GeoJsonProperties } from 'geojson'
-import type { LngLat } from '~/types/api'
+import type { Feature, FeatureCollection, Geometry, GeoJsonProperties, Polygon } from 'geojson'
 
-export type BBox = [number, number, number, number]
+export interface LngLat { lng: number; lat: number }
 
 export const EMPTY: FeatureCollection = { type: 'FeatureCollection', features: [] }
 
@@ -9,14 +8,6 @@ export function featureCollection<G extends Geometry = Geometry, P extends GeoJs
   features: Feature<G, P>[],
 ): FeatureCollection<G, P> {
   return { type: 'FeatureCollection', features }
-}
-
-export function point<P extends GeoJsonProperties>(location: LngLat, properties: P, id?: string | number): Feature<GeoJSON.Point, P> {
-  return { type: 'Feature', id, geometry: { type: 'Point', coordinates: [location.lng, location.lat] }, properties }
-}
-
-export function toTuple(l: LngLat): [number, number] {
-  return [l.lng, l.lat]
 }
 
 /** Circle of `radiusM` metres around `center` as a polygon (no turf dependency). */
@@ -44,10 +35,4 @@ export function boundsOf(points: LngLat[]): [[number, number], [number, number]]
     minLat = Math.min(minLat, p.lat); maxLat = Math.max(maxLat, p.lat)
   }
   return [[minLng, minLat], [maxLng, maxLat]]
-}
-
-/** Round a bbox so tiny camera jitter does not refetch listings. */
-export function roundBBox(b: BBox, digits = 4): BBox {
-  const f = 10 ** digits
-  return b.map(v => Math.round(v * f) / f) as BBox
 }

@@ -5,15 +5,13 @@ from dataclasses import dataclass
 
 import numpy as np
 import pandas as pd
-from pyproj import Transformer
 from scipy.spatial import cKDTree
 
 from planning_predictor.config import Settings
+from planning_predictor.geo import ITM_TO_WGS84, WGS84_TO_ITM
 from planning_predictor.schemas import Alternative, SiteEstimate
 from planning_predictor.services.matching import DECIDED_OUTCOMES
 
-_WGS84_TO_ITM = Transformer.from_crs("EPSG:4326", "EPSG:2157", always_xy=True)
-_ITM_TO_WGS84 = Transformer.from_crs("EPSG:2157", "EPSG:4326", always_xy=True)
 _COMPASS = ("N", "NE", "E", "SE", "S", "SW", "W", "NW")
 _METRES_PER_KM = 1000.0
 _DAYS_PER_WEEK = 7
@@ -106,7 +104,7 @@ def find_faster_sites(
     if len(index) == 0:
         return SiteComparison(None, [], ["No coordinates available for similar applications."])
 
-    origin = _WGS84_TO_ITM.transform(lon, lat)
+    origin = WGS84_TO_ITM.transform(lon, lat)
     site = index.stats_around(*origin, settings.site_max_radius_km)
     if site is None:
         return SiteComparison(None, [], ["No decided similar applications near this site."])
@@ -186,7 +184,7 @@ def _to_alternative(
     candidate: _Candidate, site: _AreaStats, origin: tuple[float, float], settings: Settings
 ) -> Alternative:
     area = candidate.area
-    lon, lat = _ITM_TO_WGS84.transform(origin[0] + candidate.dx, origin[1] + candidate.dy)
+    lon, lat = ITM_TO_WGS84.transform(origin[0] + candidate.dx, origin[1] + candidate.dy)
     distance_km = round(candidate.distance_m / _METRES_PER_KM)
     direction = _compass_direction(candidate.dx, candidate.dy)
     warnings = []

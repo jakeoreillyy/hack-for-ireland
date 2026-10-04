@@ -1,4 +1,4 @@
-// GSAP helpers (Agent A). Every animation goes through here so reduced motion is respected in one place.
+// GSAP helpers. Every animation goes through here so reduced motion is respected in one place.
 import { gsap } from 'gsap'
 import { ScrambleTextPlugin } from 'gsap/ScrambleTextPlugin'
 import { SplitText } from 'gsap/SplitText'

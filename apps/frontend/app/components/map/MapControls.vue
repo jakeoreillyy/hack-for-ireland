@@ -4,7 +4,7 @@ import { LocateFixed, Minus, Plus } from '@lucide/vue'
 import { DESKTOP_QUERY } from '~/lib/map/config'
 import { useMapUi } from '~/lib/map/state'
 
-// Rendered outside AnalysisMap's slot: talks to the map through shared UI state.
+// Talks to the map through shared UI state (useMapUi).
 const ui = useMapUi()
 const desktop = useMediaQuery(DESKTOP_QUERY, { ssrWidth: 1280 })
 const is3D = computed(() => ui.is3D.value ?? desktop.value)

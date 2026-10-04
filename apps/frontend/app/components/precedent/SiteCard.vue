@@ -1,6 +1,6 @@
 <script setup lang="ts">
 import { MapPin, X } from '@lucide/vue'
-import { percent } from '~/lib/planning/labels'
+import { percent, shortCouncil } from '~/lib/planning/labels'
 
 // "Drop your site": the predictor's figures within a few km of the tapped point, and faster nearby areas.
 const pr = usePrecedents()
@@ -31,14 +31,14 @@ const faster = computed(() => (site.value?.alternatives ?? []).filter(a => a.wee
           :key="a.label"
           type="button"
           class="flex w-full items-baseline justify-between gap-2 rounded px-1 py-0.5 text-left text-xs hover:bg-hivis/40"
-          :title="`${a.total} similar · ${percent(a.grantRate)} granted · ${a.distanceKm} km ${a.direction}`"
+          :title="`${a.label} · ${a.total} similar · ${percent(a.grantRate)} granted`"
           @click="pr.dropSite(a.coordinates[0], a.coordinates[1])"
         >
-          <span class="truncate text-foreground">{{ a.label }}</span>
+          <span class="truncate text-foreground">{{ a.distanceKm }} km {{ a.direction }} · {{ shortCouncil(a.authority) }}</span>
           <span class="shrink-0 font-semibold tabular-nums text-foreground">{{ a.weeksSaved }} wks faster</span>
         </button>
       </div>
     </template>
-    <p class="mt-2 text-[11px] text-muted-foreground">Team planning predictor · past decisions, not a forecast</p>
+    <p class="mt-2 text-[11px] text-muted-foreground">Past decisions in this area, not a forecast</p>
   </div>
 </template>

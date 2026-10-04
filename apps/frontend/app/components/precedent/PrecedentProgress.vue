@@ -1,39 +1,35 @@
 <script setup lang="ts">
-import GradientOrb from '~/components/report/GradientOrb.vue'
-import StageRow, { type StageView } from '~/components/analysis/StageRow.vue'
+import GradientOrb from './GradientOrb.vue'
+import StageRow, { type StageView } from './StageRow.vue'
 import { gsap, reducedMotion } from '~/lib/motion'
 import { AUTHORITY_LABEL } from '~/lib/planning/labels'
 
 const pr = usePrecedents()
-const ORDER = ['parsing', 'searching', 'explaining'] as const
+// One request does both, so the two stages finish together when the answer arrives.
+const STAGE_COUNT = 2
 
 const stages = computed<StageView[]>(() => {
-  const current = pr.state.value === 'done' ? ORDER.length : ORDER.indexOf(pr.state.value as typeof ORDER[number])
-  const status = (i: number): StageView['status'] => (i < current ? 'done' : i === current ? 'running' : 'pending')
+  const status: StageView['status'] = pr.state.value === 'done' ? 'done' : 'running'
+  const pending: StageView['status'] = pr.state.value === 'done' ? 'done' : 'pending'
   const p = pr.parsed.value
   const r = pr.result.value
   const read = p ? [p.homes ? `${p.homes} homes` : null, p.storeys ? `${p.storeys} storeys` : null, p.mixedUse ? 'mixed use' : null].filter(Boolean).join(', ') : ''
   return [
     {
-      stage: 'parsing', status: status(0),
-      label: status(0) === 'done' ? `Read: ${read || p?.kind || 'description'}` : 'Reading your description…',
-      detail: p ? (p.source === 'ai' ? 'Read by the planning predictor' : 'Read by rules') : undefined,
+      stage: 'reading', status,
+      label: status === 'done' ? `Read: ${read || 'description'}` : 'Reading your description…',
     },
     {
-      stage: 'searching', status: status(1),
-      label: status(1) === 'done' && r ? `${r.stats.total} similar applications found` : 'Finding similar applications…',
+      stage: 'searching', status: pending,
+      label: pending === 'done' && r ? `${r.stats.total} similar applications found` : 'Finding similar applications…',
       detail: r ? AUTHORITY_LABEL[r.proposal.authority] : undefined,
-    },
-    {
-      stage: 'explaining', status: status(2),
-      label: status(2) === 'done' ? 'Summary written' : 'Writing summary…',
     },
   ]
 })
 
 // Progress rail: fills down the stage list as stages finish.
 const rail = ref<HTMLElement>()
-const doneShare = computed(() => stages.value.filter(s => s.status === 'done').length / ORDER.length)
+const doneShare = computed(() => stages.value.filter(s => s.status === 'done').length / STAGE_COUNT)
 watch(doneShare, (share) => {
   if (!rail.value) return
   if (reducedMotion()) rail.value.style.transform = `scaleY(${share})`

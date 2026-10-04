@@ -1,12 +1,8 @@
 import { Map as MlMap, type ErrorEvent as MlErrorEvent, type MapOptions, type LayerSpecification, type SourceSpecification } from 'maplibre-gl'
-import type { InjectionKey, ShallowRef } from 'vue'
 import {
   BUILDING_LAYER, BUILDING_SOFT_COLOR, BUILDING_SOFT_OPACITY, MAP_STYLE, MAP_STYLE_FALLBACK, STYLE_LOAD_TIMEOUT_MS,
 } from './config'
 import { ensureMapWorker } from './worker'
-
-/** Provided by AnalysisMap; null until the style has loaded. Layer components inject this. */
-export const MAP_KEY: InjectionKey<ShallowRef<MlMap | null>> = Symbol('mend-map')
 
 export interface CreateMapResult {
   map: MlMap
@@ -56,20 +52,6 @@ export function softenBuildings(map: MlMap) {
   if (!map.getLayer(BUILDING_LAYER)) return
   map.setPaintProperty(BUILDING_LAYER, 'fill-extrusion-color', BUILDING_SOFT_COLOR)
   map.setPaintProperty(BUILDING_LAYER, 'fill-extrusion-opacity', BUILDING_SOFT_OPACITY)
-}
-
-/**
- * Run `fn` once layers can be added. Only call with a map that has fired 'load'
- * (AnalysisMap provides it after load). isStyleLoaded() is also false while any
- * source is loading tiles, so don't gate on it: try, and retry on 'idle' if refused.
- */
-export function whenStyleReady(map: MlMap, fn: () => void) {
-  try {
-    fn()
-  } catch (e) {
-    if (!/style is not done loading/i.test(String((e as Error)?.message))) throw e
-    map.once('idle', () => whenStyleReady(map, fn))
-  }
 }
 
 export function ensureSource(map: MlMap, id: string, spec: SourceSpecification) {

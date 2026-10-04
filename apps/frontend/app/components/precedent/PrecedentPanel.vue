@@ -4,9 +4,9 @@ import PrecedentProgress from './PrecedentProgress.vue'
 import PrecedentReport from './PrecedentReport.vue'
 import CaseCard from './CaseCard.vue'
 
-// Panel routing, RentCheck-style: case card > progress > report > proposal form.
+// Panel routing: case card > progress > report > proposal form.
 const pr = usePrecedents()
-const running = computed(() => ['parsing', 'searching', 'explaining'].includes(pr.state.value))
+const running = computed(() => pr.state.value === 'searching')
 
 // Hold the progress view a beat after the last stage ticks, then show the report.
 const showReport = useState('pr:show-report', () => false)
@@ -18,6 +18,10 @@ watch(() => pr.state.value, (state, prev) => {
     timer = setTimeout(() => { animateReport.value = true; showReport.value = true }, 700)
   }
   else if (state !== 'done') showReport.value = false
+})
+// A shared link can finish its search before this panel mounts, so show the report straight away.
+onMounted(() => {
+  if (pr.state.value === 'done') showReport.value = true
 })
 onBeforeUnmount(() => clearTimeout(timer))
 

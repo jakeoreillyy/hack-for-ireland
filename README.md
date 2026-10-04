@@ -27,6 +27,22 @@ predictor above.
 CONTRACT.md, data/schema.md   shared, frozen contracts — see "Working concurrently" in the plan
 ```
 
+### Run everything
+
+```bash
+# 1. data (once): writes data/applications.parquet, ~30 s, needs internet
+pip install -r data/requirements.txt && python data/prep.py
+
+# 2. API, http://127.0.0.1:8000 (optional: add ANTHROPIC_API_KEY to apps/backend/.env)
+cd apps/backend && pip install -e ".[dev]" && uvicorn planning_predictor.main:app --reload
+
+# 3. app, http://localhost:3000 (second terminal)
+cd apps/frontend && npm install && npm run dev
+```
+
+Without step 1 the API falls back to `data/fake_sample.csv` (10 rows). For the live demo, type
+"100 apartments" with Dublin City Council, then tap the map to drop a site.
+
 ### Data pipeline (Role 1 — ready to build on)
 
 ```bash

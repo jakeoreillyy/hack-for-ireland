@@ -3,6 +3,7 @@
 import pandas as pd
 
 from planning_predictor.config import Settings
+from planning_predictor.geo import ITM_TO_WGS84
 from planning_predictor.schemas import DelayFactor, Match, ProjectSpec, Stats
 
 DECIDED_OUTCOMES = ("granted", "refused")  # outcomes that count for rates and timings
@@ -88,23 +89,50 @@ def summarise_outcomes(
     return stats, delay_factors, warnings
 
 
+def _optional_int(value) -> int | None:
+    return None if pd.isna(value) else int(value)
+
+
+def _optional_date(value) -> str | None:
+    return None if pd.isna(value) else str(value)[:10]
+
+
 def closest_matches(similar: pd.DataFrame, spec: ProjectSpec, limit: int = 5) -> list[Match]:
-    """The applications nearest in size to the request."""
+    """The applications nearest in size to the request, with what the map and case card need."""
     distance = pd.Series(0.0, index=similar.index)
     if spec.units:
         distance += (similar["units"] - spec.units).abs() / spec.units
     if spec.storeys:
         distance += (similar["storeys"].fillna(spec.storeys) - spec.storeys).abs() / 5
     nearest = similar.loc[distance.nsmallest(limit).index]
+
+    # Convert all coordinates in one call; rows without coordinates stay None.
+    has_point = nearest["itm_easting"].notna() & nearest["itm_northing"].notna()
+    lons, lats = {}, {}
+    if has_point.any():
+        located = nearest[has_point]
+        lon_values, lat_values = ITM_TO_WGS84.transform(
+            located["itm_easting"].to_numpy(float), located["itm_northing"].to_numpy(float)
+        )
+        lons = dict(zip(located.index, lon_values, strict=True))
+        lats = dict(zip(located.index, lat_values, strict=True))
+
     return [
         Match(
             id=str(row.id),
             address=row.address if pd.notna(row.address) else None,
-            units=None if pd.isna(row.units) else int(row.units),
-            storeys=None if pd.isna(row.storeys) else int(row.storeys),
+            units=_optional_int(row.units),
+            storeys=_optional_int(row.storeys),
             decision=str(row.decision).upper(),
-            decision_date=None if pd.isna(row.decision_date) else str(row.decision_date)[:10],
+            received_date=_optional_date(row.received_date),
+            decision_date=_optional_date(row.decision_date),
+            days_to_decision=_optional_int(row.days_to_decision),
+            mixed_use=bool(row.mixed_use),
+            further_information=bool(row.fi_requested),
+            appealed=bool(row.appealed),
+            lat=round(float(lats[index]), 6) if index in lats else None,
+            lon=round(float(lons[index]), 6) if index in lons else None,
             link=row.link if pd.notna(row.link) and row.link else None,
         )
-        for row in nearest.itertuples()
+        for index, row in zip(nearest.index, nearest.itertuples(), strict=True)
     ]

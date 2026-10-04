@@ -1,9 +1,9 @@
 <script setup lang="ts">
 import { CalendarDays, ExternalLink, Home, Layers, MapPin, PersonStanding } from '@lucide/vue'
 import { Button } from '@/components/ui/button'
-import PanelHeader from '~/components/property/PanelHeader.vue'
+import PanelHeader from './PanelHeader.vue'
 import { day } from '~/lib/format'
-import type { PlanningCase } from '~/lib/planning/contract'
+import type { PlanningCase } from '~/lib/planning/types'
 import { AUTHORITY_LABEL, STATUS_STYLE, weeksLabel } from '~/lib/planning/labels'
 
 const props = defineProps<{ item: PlanningCase }>()
@@ -20,7 +20,7 @@ watch(() => props.item.id, async () => {
   if (props.item.id === id) link.value = url
   resolving.value = false
 }, { immediate: true })
-const streetView = computed(() => `https://www.google.com/maps/@?api=1&map_action=pano&viewpoint=${props.item.coordinates[1]},${props.item.coordinates[0]}`)
+const streetView = computed(() => props.item.coordinates && `https://www.google.com/maps/@?api=1&map_action=pano&viewpoint=${props.item.coordinates[1]},${props.item.coordinates[0]}`)
 </script>
 
 <template>
@@ -34,11 +34,10 @@ const streetView = computed(() => `https://www.google.com/maps/@?api=1&map_actio
         </span>
         <span v-if="item.appealed" class="rounded-full border border-planning-appealed/30 bg-planning-appealed/10 px-2.5 py-1 text-xs font-semibold text-planning-appealed">Appealed</span>
         <span v-if="item.furtherInfo" class="rounded-full border px-2.5 py-1 text-xs font-semibold text-muted-foreground">Further info requested</span>
-        <span class="ml-auto rounded-md bg-hivis px-2.5 py-1 text-xs font-bold text-ink tabular-nums">{{ item.match }}% match</span>
       </div>
 
       <div class="space-y-1">
-        <p class="flex items-start gap-1.5 text-sm text-foreground" :title="item.location"><MapPin class="mt-0.5 size-4 shrink-0 text-brand" /> <span class="line-clamp-2">{{ item.location }}</span></p>
+        <p class="flex items-start gap-1.5 text-sm text-foreground" :title="item.location"><MapPin class="mt-0.5 size-4 shrink-0 text-brand" /> <span class="line-clamp-2">{{ item.location || 'Address not recorded' }}</span></p>
         <p class="pl-[22px] text-xs text-muted-foreground">{{ AUTHORITY_LABEL[item.authority] }}</p>
       </div>
 
@@ -53,18 +52,13 @@ const streetView = computed(() => `https://www.google.com/maps/@?api=1&map_actio
         </div>
         <div class="bg-background p-3">
           <dt class="flex items-center gap-1 text-xs text-muted-foreground"><CalendarDays class="size-3" /> Received</dt>
-          <dd class="font-medium tabular-nums">{{ day(item.receivedDate) }}</dd>
+          <dd class="font-medium tabular-nums">{{ item.receivedDate ? day(item.receivedDate) : 'Not recorded' }}</dd>
         </div>
         <div class="bg-background p-3">
           <dt class="text-xs text-muted-foreground">Time to decision</dt>
           <dd class="font-medium tabular-nums">{{ weeksLabel(item) }}</dd>
         </div>
       </dl>
-
-      <div v-if="item.description?.trim()" class="space-y-1.5">
-        <p class="type-caption-upper text-muted-foreground">Development description</p>
-        <p class="line-clamp-6 text-sm leading-relaxed text-foreground">{{ item.description }}</p>
-      </div>
 
       <div class="space-y-2">
         <Button v-if="link" as-child class="h-11 w-full rounded-md btn-hivis bg-hivis text-ink hover:bg-hivis text-[15px]">
@@ -76,7 +70,7 @@ const streetView = computed(() => `https://www.google.com/maps/@?api=1&map_actio
         <p v-else class="rounded-lg border border-dashed p-3 text-sm text-muted-foreground">
           Search <strong class="font-mono text-foreground">{{ item.id }}</strong> on the council's planning site. We couldn't find a direct link for this case.
         </p>
-        <Button as-child variant="outline" class="h-10 w-full rounded-md border-2 border-ink">
+        <Button v-if="streetView" as-child variant="outline" class="h-10 w-full rounded-md border-2 border-ink">
           <a :href="streetView" target="_blank" rel="noopener"><PersonStanding class="size-4" /> Street View</a>
         </Button>
       </div>

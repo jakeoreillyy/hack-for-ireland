@@ -14,7 +14,7 @@ import { clearBuildingHighlight, highlightBuildingWhenSettled, removeBuildingHig
 import { fitPoints, flyToProperty, startOrbit } from '~/lib/map/camera'
 import { CasePins } from '~/lib/map/casePins'
 import { useMapUi } from '~/lib/map/state'
-import type { PlanningCase } from '~/lib/planning/contract'
+import type { PlanningCase } from '~/lib/planning/types'
 
 const container = ref<HTMLDivElement>()
 const map = shallowRef<MlMap | null>(null)
@@ -28,9 +28,10 @@ const cases = computed(() => pr.result.value?.cases ?? [])
 let pins: CasePins | null = null
 let stopOrbit: (() => void) | null = null
 
-const lngLat = (c: PlanningCase) => ({ lng: c.coordinates[0], lat: c.coordinates[1] })
-// Ignore any point outside Ireland so one bad coordinate can't zoom the camera out to sea.
-const inIreland = (c: PlanningCase) => c.coordinates[0] > -11 && c.coordinates[0] < -5 && c.coordinates[1] > 51 && c.coordinates[1] < 56
+type LocatedCase = PlanningCase & { coordinates: [number, number] }
+const lngLat = (c: LocatedCase) => ({ lng: c.coordinates[0], lat: c.coordinates[1] })
+// Ignore cases without a point, or outside Ireland, so one bad coordinate can't zoom the camera out to sea.
+const inIreland = (c: PlanningCase): c is LocatedCase => c.coordinates !== null && c.coordinates[0] > -11 && c.coordinates[0] < -5 && c.coordinates[1] > 51 && c.coordinates[1] < 56
 
 onMounted(async () => {
   const start = flat.value ? CAMERA.mobileBrowse : CAMERA.browse
@@ -46,9 +47,9 @@ onMounted(async () => {
   pins = new CasePins(m, {
     hover: id => (hovered.value = id),
     select: (id) => {
-      // Tap the selected pin again for its actions (RentCheck's pin pattern).
+      // Tap the selected pin again for its actions.
       const c = pr.caseById(id)
-      if (id === pr.selectedId.value && c) openRadialOnPin(id, m.project(c.coordinates))
+      if (id === pr.selectedId.value && c?.coordinates) openRadialOnPin(id, m.project(c.coordinates))
       else pr.selectCase(id)
     },
     context: openRadialOnPin,
@@ -97,7 +98,7 @@ function addColumns(m: MlMap) {
         ['match', ['get', 'status'],
           'granted', token('--planning-granted', '#1f7a44'),
           'refused', token('--planning-refused', '#b42318'),
-          token('--planning-pending', '#2b6cb0')],
+          token('--planning-closed', '#6b7280')],
       ],
       'fill-extrusion-height': ['get', 'height'],
       'fill-extrusion-base': 0,
@@ -138,9 +139,9 @@ watch(pr.site, (site) => {
   }
   if (!siteMarker) {
     const el = document.createElement('div')
-    el.className = 'rc-drop'
+    el.className = 'pr-drop'
     el.setAttribute('aria-label', 'Your site')
-    el.innerHTML = '<div class="rc-drop__dot"></div>'
+    el.innerHTML = '<div class="pr-drop__dot"></div>'
     siteMarker = new Marker({ element: el }).setLngLat([site.lng, site.lat]).addTo(m)
   }
   else siteMarker.setLngLat([site.lng, site.lat])
@@ -173,8 +174,8 @@ function syncPinState() {
 }
 watch([pr.selectedId, hovered], syncPinState)
 
-// Orbit slowly over Dublin while the search runs, like RentCheck's analysis.
-const running = computed(() => ['parsing', 'searching', 'explaining'].includes(pr.state.value) && !cases.value.length)
+// Orbit slowly over Dublin while the search runs.
+const running = computed(() => pr.state.value === 'searching' && !cases.value.length)
 watch(running, (now) => {
   const m = map.value
   if (!m) return
@@ -227,7 +228,7 @@ function openRadial(point: { x: number; y: number }, at: { lng: number; lat: num
 function openRadialOnPin(id: string, point: { x: number; y: number }) {
   const c = pr.caseById(id)
   // Centre the ring on the pill, which sits ~22 px above the pin's tip.
-  if (c) openRadial({ x: point.x, y: point.y - 22 }, lngLat(c), id)
+  if (c && inIreland(c)) openRadial({ x: point.x, y: point.y - 22 }, lngLat(c), id)
 }
 
 function closeRadial() {

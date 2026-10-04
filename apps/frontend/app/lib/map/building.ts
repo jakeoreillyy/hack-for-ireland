@@ -1,8 +1,7 @@
 import type { Map as MlMap, GeoJSONSource, GeoJSONFeature } from 'maplibre-gl'
 import type { Feature, MultiPolygon, Polygon, Position } from 'geojson'
-import type { LngLat } from '~/types/api'
 import { BUILDING_LAYER } from './config'
-import { EMPTY, featureCollection } from './geo'
+import { EMPTY, featureCollection, type LngLat } from './geo'
 import { ensureLayer, ensureSource, removeLayersAndSource } from './core'
 import { token } from './colors'
 

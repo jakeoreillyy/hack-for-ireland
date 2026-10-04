@@ -46,7 +46,7 @@ onBeforeUnmount(() => tweens.forEach(t => t?.kill()))
       <span v-else-if="stage.status === 'done'" ref="tick" class="flex size-5 items-center justify-center rounded-full bg-brand text-brand-foreground">
         <Check class="size-3" stroke-width="3.5" />
       </span>
-      <TriangleAlert v-else class="size-4 text-verdict-above" />
+      <TriangleAlert v-else class="size-4 text-planning-refused" />
     </span>
     <div class="min-w-0 flex-1">
       <p
@@ -55,7 +55,7 @@ onBeforeUnmount(() => tweens.forEach(t => t?.kill()))
           'text-muted-foreground': stage.status === 'pending',
           'font-semibold text-foreground': stage.status === 'running',
           'text-foreground': stage.status === 'done',
-          'text-verdict-above': stage.status === 'failed',
+          'text-planning-refused': stage.status === 'failed',
         }"
       >
         <span v-if="parts.num != null" class="tabular-nums">{{ shownNum }}&nbsp;</span><span ref="beforeEl">{{ parts.before }}</span><span ref="afterEl">{{ parts.after }}</span>

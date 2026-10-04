@@ -37,7 +37,7 @@ function angleFor(i: number) {
 onMounted(() => {
   const els = itemEls.value
   tl = gsap.timeline({ paused: true, onReverseComplete: () => emit('closed') })
-  const hubEl = root.value!.querySelector('.rc-radial__hub')
+  const hubEl = root.value!.querySelector('.pr-radial__hub')
   if (hubEl) tl.fromTo(hubEl, { scale: 0, autoAlpha: 0 }, { scale: 1, autoAlpha: 1, duration: 0.2, ease: 'power2.out', easeReverse: 'power2.in' })
   tl.fromTo(els, { x: 0, y: 0, scale: 0.4, autoAlpha: 0 }, {
     x: (i: number) => Math.cos(angleFor(i)) * RADIUS,
@@ -84,35 +84,35 @@ defineExpose({ close })
 <template>
   <div
     ref="root"
-    class="rc-radial pointer-events-none absolute z-20"
+    class="pr-radial pointer-events-none absolute z-20"
     :style="{ left: `${x}px`, top: `${y}px` }"
     role="menu"
     aria-label="Map actions"
   >
-    <div v-if="hub" class="rc-radial__hub" />
+    <div v-if="hub" class="pr-radial__hub" />
     <button
       v-for="(item, i) in items"
       :key="item.key"
       :ref="el => { if (el) itemEls[i] = el as HTMLElement }"
       type="button"
       role="menuitem"
-      class="rc-radial__item pointer-events-auto group"
+      class="pr-radial__item pointer-events-auto group"
       :aria-label="item.label"
       @click.stop="pick(item.key)"
     >
       <component :is="item.icon" class="size-5" />
-      <span class="rc-radial__label" :style="labelStyle(i)">{{ item.label }}</span>
+      <span class="pr-radial__label" :style="labelStyle(i)">{{ item.label }}</span>
     </button>
   </div>
 </template>
 
 <style scoped>
-.rc-radial { width: 0; height: 0; }
-.rc-radial__hub {
+.pr-radial { width: 0; height: 0; }
+.pr-radial__hub {
   position: absolute; left: -9px; top: -9px; width: 18px; height: 18px; border-radius: 50%;
   background: #fff; border: 4px solid var(--brand); box-shadow: 0 2px 6px rgb(0 0 0 / 0.3);
 }
-.rc-radial__item {
+.pr-radial__item {
   position: absolute; left: -24px; top: -24px; width: 48px; height: 48px; border-radius: 50%;
   display: grid; place-items: center;
   background: var(--background, #fff); color: var(--ink, #1b2430);
@@ -121,12 +121,12 @@ defineExpose({ close })
   cursor: pointer; visibility: hidden;
   transition: background-color 120ms ease, color 120ms ease;
 }
-.rc-radial__item:hover, .rc-radial__item:focus-visible { background: var(--brand); color: #fff; outline: none; }
-.rc-radial__label {
+.pr-radial__item:hover, .pr-radial__item:focus-visible { background: var(--brand); color: #fff; outline: none; }
+.pr-radial__label {
   position: absolute;
   white-space: nowrap; padding: 2px 8px; border-radius: 999px;
   background: var(--ink, #1b2430); color: #fff; font-size: 12px; font-weight: 600;
   opacity: 0; pointer-events: none; transition: opacity 120ms ease;
 }
-.rc-radial__item:hover .rc-radial__label, .rc-radial__item:focus-visible .rc-radial__label { opacity: 1; }
+.pr-radial__item:hover .pr-radial__label, .pr-radial__item:focus-visible .pr-radial__label { opacity: 1; }
 </style>

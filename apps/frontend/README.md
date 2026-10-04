@@ -1,8 +1,8 @@
-# Precedent
+# Precedent (frontend)
 
 See how similar housing proposals fared in planning, using Ireland's national planning register. Built for small builders and community housing groups at Build for Ireland, 4 October 2026.
 
-Describe a proposal in plain English and pick a council. Precedent reads the description, finds similar past applications and shows:
+Describe a proposal in plain English and pick a council. Precedent shows:
 
 - the share of decided similar applications that were granted, and the typical time to a decision
 - what added time (further information requests, appeals), as comparisons, not causes
@@ -11,40 +11,39 @@ Describe a proposal in plain English and pick a council. Precedent reads the des
 
 It is an evidence browser, not a predictor. It shows how past applications fared; it never says how yours will.
 
-## Using it
-
-- **Search:** type a description, or tap one of the three examples, then **Find similar applications**. If the description has no number of homes, you're asked for one.
-- **Cases:** click a case in the list or a pin on the map to fly to it. The case card links to the council record. Dublin City Council publishes no links in the register, so those are looked up on the council's planning portal.
-- **Drop your site:** after a search, tap the map to see similar applications within a few kilometres and any faster nearby areas.
-- **Compare:** "Compare with the Dublin councils" runs the same proposal against the four Dublin councils.
-- **Share and print:** the page address holds the search, so a copied link reruns it. The print button gives a one-page brief.
-
 ## Run locally
 
+The app needs the planning API (`apps/backend`) running. From the repo root:
+
 ```sh
+# terminal 1: the API (see apps/backend/README.md for setup)
+cd apps/backend && uvicorn planning_predictor.main:app --reload
+
+# terminal 2: this app
+cd apps/frontend
 npm install
-cp .env.example .env
+cp .env.example .env     # only needed if the API is not at http://127.0.0.1:8000
 npm run dev
 ```
 
-Open the local URL Nuxt prints. For a production build, run `npm run build`.
+Open the local URL Nuxt prints. `npm run typecheck` checks the types; `npm run build` makes a production build.
 
-### Data sources
+## How it fits together
 
-- `NUXT_PREDICTOR_URL` points at the team's predictor backend (hack-for-ireland `apps/backend`, FastAPI on `:8000`). It covers all 31 councils and powers "Drop your site".
-- With it unset or down, the API falls back to a local snapshot of the four Dublin councils in `server/data/precedents.json`. Rebuild it with `node scripts/build-snapshot.mjs`.
-- No AI service key is needed. Parsing and summaries come from the predictor or from rules and templates.
+There is no data or matching logic in this app. One call to the API does the work:
 
-## API
+| Where | What |
+| --- | --- |
+| `app/lib/api/predict.ts` | The only code that talks to `POST /predict` (shape in the root `CONTRACT.md`). Maps the response onto the UI types. |
+| `app/composables/usePrecedents.ts` | Search state shared by the panel, the map and the cards. |
+| `app/lib/planning/types.ts` | UI types and the list of 31 councils. |
+| `server/api/council-link.get.ts` | Looks up the council portal page for Dublin City Council cases, which have no link in the register. |
 
-| Method | Path | Returns |
-| --- | --- | --- |
-| `POST` | `/api/parse` | homes, storeys and mixed use read from a description |
-| `GET` | `/api/precedents` | stats and closest cases; add `lat` and `lon` for a site estimate |
-| `POST` | `/api/explain` | the plain-English summary |
-| `GET` | `/api/council-link?id=` | the council portal page for a Dublin City Council application number |
-
-Types are in `app/lib/planning/contract.ts`.
+- **Search:** type a description, or tap one of the three examples. If the description has no number of homes, you're asked for one.
+- **Cases:** click a case in the list or a pin on the map to fly to it.
+- **Drop your site:** after a search, tap the map to see similar applications within a few kilometres and any faster nearby areas.
+- **Compare:** "Compare with the Dublin councils" runs the same proposal against the four Dublin councils.
+- **Share and print:** the page address holds the search, so a copied link reruns it. The print button gives a one-page brief.
 
 ## Data credit
 

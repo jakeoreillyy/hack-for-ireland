@@ -2,7 +2,7 @@
 import PrecedentShell from '~/components/precedent/PrecedentShell.vue'
 
 useHead({
-  title: 'Precedent · Dublin planning decisions',
+  title: 'Precedent · Irish planning decisions',
   meta: [{ name: 'description', content: 'See how similar housing proposals fared in planning, from the national planning register.' }],
   // Archivo's condensed widths set the site-notice lettering.
   link: [

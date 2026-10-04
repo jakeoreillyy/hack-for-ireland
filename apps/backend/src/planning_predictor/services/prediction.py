@@ -50,6 +50,6 @@ def predict(
         site_estimate=comparison.site_estimate,
         alternatives=comparison.alternatives,
         summary=build_summary(stats, delay_factors, comparison.alternatives),
-        matches=matching.closest_matches(similar, spec),
+        matches=matching.closest_matches(similar, spec, request.max_matches),
         warnings=warnings,
     )

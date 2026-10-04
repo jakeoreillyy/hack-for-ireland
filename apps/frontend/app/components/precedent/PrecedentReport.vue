@@ -2,23 +2,21 @@
 import { ChevronDown, Link2, Printer } from '@lucide/vue'
 import { toast } from 'vue-sonner'
 import { Button } from '@/components/ui/button'
-import PanelHeader from '~/components/property/PanelHeader.vue'
+import PanelHeader from './PanelHeader.vue'
 import { gsap, reducedMotion } from '~/lib/motion'
-import { SNAPSHOT_AUTHORITIES, type Authority, type PrecedentsResponse } from '~/lib/planning/contract'
-import { AUTHORITY_LABEL, STATUS_STYLE, percent } from '~/lib/planning/labels'
+import { DUBLIN_AUTHORITIES, type Authority, type PrecedentStats } from '~/lib/planning/types'
+import { AUTHORITY_LABEL, STATUS_STYLE, percent, shortCouncil } from '~/lib/planning/labels'
 
 // One question, one answer, five cases.
 const props = defineProps<{ animate?: boolean }>()
 const pr = usePrecedents()
 const result = computed(() => pr.result.value!)
 const stats = computed(() => result.value.stats)
-const explanation = computed(() => pr.explanation.value)
 const council = computed(() => AUTHORITY_LABEL[result.value.proposal.authority])
 const title = computed(() => {
   const p = result.value.proposal
-  return [p.homes ? `${p.homes} homes` : null, p.storeys ? `${p.storeys} storeys` : null, p.mixedUse ? 'mixed use' : null].filter(Boolean).join(' · ') || p.kind
+  return [p.homes ? `${p.homes} homes` : null, p.storeys ? `${p.storeys} storeys` : null, p.mixedUse ? 'mixed use' : null].filter(Boolean).join(' · ') || 'Housing proposal'
 })
-const snapshot = computed(() => new Date(result.value.source.snapshotDate).toLocaleDateString('en-IE', { day: 'numeric', month: 'short', year: 'numeric', timeZone: 'UTC' }))
 
 const subline = computed(() => {
   const parts = [`${stats.value.total} similar`]
@@ -26,8 +24,8 @@ const subline = computed(() => {
   return parts.join(' · ')
 })
 
-// "What added time": the predictor's delay factors, with the matching share folded in.
-const delays = computed(() => (result.value.delayFactors ?? []).filter(f => f.addedWeeks > 0).map((f) => {
+// "What added time": each delay factor, with the share of cases it affected folded in.
+const delays = computed(() => result.value.delayFactors.filter(f => f.addedWeeks > 0).map((f) => {
   const share = f.factor === 'appeal' ? stats.value.appealShare : stats.value.furtherInfoShare
   return { key: f.factor, label: f.label, weeks: f.addedWeeks, share }
 }))
@@ -45,27 +43,21 @@ async function copyLink() {
   }
 }
 
-// Other councils, on request: the same proposal sent to each (one /api/precedents call per council).
-type CompareRow = { authority: Authority; stats: PrecedentsResponse['stats'] | null }
+// Other councils, on request: the same proposal sent to each (one search per council).
+type CompareRow = { authority: Authority; stats: PrecedentStats | null }
 const compareOpen = ref(false)
 const compareRows = ref<CompareRow[] | null>(null)
 watch(() => pr.result.value, () => { compareRows.value = null; compareOpen.value = false })
 async function toggleCompare() {
   compareOpen.value = !compareOpen.value
   if (!compareOpen.value || compareRows.value) return
-  const p = result.value.proposal
+  const own = result.value.proposal.authority
   // The four Dublin councils, plus this one if it's elsewhere: at most five searches.
-  const councils = SNAPSHOT_AUTHORITIES.includes(p.authority) ? [...SNAPSHOT_AUTHORITIES] : [p.authority, ...SNAPSHOT_AUTHORITIES]
-  compareRows.value = await Promise.all(councils.map(async (authority): Promise<CompareRow> => {
-    if (authority === p.authority) return { authority, stats: stats.value }
-    try {
-      const query: Record<string, string | number | boolean> = { authority, homes: p.homes ?? 0, mixedUse: p.mixedUse }
-      if (p.storeys) query.storeys = p.storeys
-      return { authority, stats: (await $fetch<PrecedentsResponse>('/api/precedents', { query })).stats }
-    } catch {
-      return { authority, stats: null }
-    }
-  }))
+  const councils = DUBLIN_AUTHORITIES.includes(own) ? [...DUBLIN_AUTHORITIES] : [own, ...DUBLIN_AUTHORITIES]
+  compareRows.value = await Promise.all(councils.map(async (authority): Promise<CompareRow> => ({
+    authority,
+    stats: authority === own ? stats.value : await pr.compareWith(authority),
+  })))
 }
 function openCouncil(authority: Authority) {
   const last = pr.lastRun.value
@@ -98,15 +90,15 @@ onMounted(() => {
         </h2>
         <h2 v-else class="type-display-sm text-balance text-foreground">Too few decided applications to give a grant rate</h2>
         <p class="text-sm text-muted-foreground">{{ subline }}</p>
-        <ul v-if="result.warnings?.length" class="space-y-0.5 text-xs text-muted-foreground">
+        <ul v-if="result.warnings.length" class="space-y-0.5 text-xs text-muted-foreground">
           <li v-for="w in result.warnings" :key="w">{{ w }}</li>
         </ul>
       </section>
 
       <!-- In plain English -->
-      <section v-if="explanation" data-rise class="space-y-2">
+      <section data-rise class="space-y-2">
         <h3 class="type-caption-upper text-muted-foreground">In plain English</h3>
-        <p class="text-sm leading-relaxed text-foreground">{{ explanation.text }}</p>
+        <p class="text-sm leading-relaxed text-foreground">{{ result.summary }}</p>
       </section>
 
       <!-- What added time -->
@@ -135,7 +127,7 @@ onMounted(() => {
               <span class="size-2.5 shrink-0 rounded-full" :class="STATUS_STYLE[c.status].dot" />
               <span class="min-w-0 flex-1">
                 <span class="block font-mono text-xs text-muted-foreground">{{ c.id }}</span>
-                <span class="block text-sm text-foreground">{{ [c.homes ? `${c.homes} homes` : null, c.storeys ? `${c.storeys} storeys` : null].filter(Boolean).join(' · ') || c.title }} · {{ c.year }}</span>
+                <span class="block text-sm text-foreground">{{ [c.homes ? `${c.homes} homes` : null, c.storeys ? `${c.storeys} storeys` : null].filter(Boolean).join(' · ') || c.title }} <template v-if="c.year"> · {{ c.year }}</template></span>
               </span>
               <span class="shrink-0 text-xs font-semibold" :class="STATUS_STYLE[c.status].text">{{ c.decisionLabel }}</span>
             </button>
@@ -160,7 +152,7 @@ onMounted(() => {
                 :class="row.authority === result.proposal.authority ? 'bg-hivis/35' : 'hover:bg-muted/60'"
                 @click="openCouncil(row.authority)"
               >
-                <span class="text-foreground">{{ AUTHORITY_LABEL[row.authority].replace(' County Council', '').replace(' Council', '') }}<span v-if="row.stats" class="text-xs text-muted-foreground"> · {{ row.stats.total }} similar</span></span>
+                <span class="text-foreground">{{ shortCouncil(AUTHORITY_LABEL[row.authority]) }}<span v-if="row.stats" class="text-xs text-muted-foreground"> · {{ row.stats.total }} similar</span></span>
                 <span v-if="row.stats?.grantRate != null" class="shrink-0 tabular-nums text-foreground"><strong>{{ percent(row.stats.grantRate) }}</strong> granted<template v-if="row.stats.medianWeeks != null"> · {{ row.stats.medianWeeks }} wks</template></span>
                 <span v-else class="shrink-0 text-xs text-muted-foreground">{{ row.stats ? 'Not enough data' : "Couldn't load" }}</span>
               </button>
@@ -174,8 +166,8 @@ onMounted(() => {
 
       <!-- Sources -->
       <p class="text-[11px] leading-relaxed text-muted-foreground">
-        <a :href="result.source.url" target="_blank" rel="noopener" class="underline-offset-2 hover:underline">National Planning Applications register</a>
-        · Dept. of Housing · {{ result.source.licence }} · snapshot {{ snapshot }}<template v-if="result.engine === 'predictor'"> · figures from the team planning predictor</template>.
+        <a href="https://data.gov.ie/dataset/planning-application-sites1" target="_blank" rel="noopener" class="underline-offset-2 hover:underline">National Planning Applications register</a>
+        · Dept. of Housing, Local Government and Heritage · CC BY 4.0.
         Past decisions, not a prediction.
       </p>
     </div>

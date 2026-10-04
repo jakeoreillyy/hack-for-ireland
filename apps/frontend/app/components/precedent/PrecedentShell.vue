@@ -8,7 +8,7 @@ import PrecedentMapView from './PrecedentMapView.vue'
 import PrecedentPanel from './PrecedentPanel.vue'
 import SiteCard from './SiteCard.vue'
 import { DESKTOP_QUERY } from '~/lib/map/config'
-import { AUTHORITIES, type Authority } from '~/lib/planning/contract'
+import { AUTHORITIES, type Authority } from '~/lib/planning/types'
 
 const pr = usePrecedents()
 
@@ -32,7 +32,7 @@ watch(pr.lastRun, (run) => {
 const desktop = useMediaQuery(DESKTOP_QUERY, { ssrWidth: 1280 })
 const hasCases = computed(() => !!pr.result.value?.cases.length)
 
-// Mobile bottom sheet: peek / half / full, as in RentCheck. The sheet is 72 px shorter than
+// Mobile bottom sheet: peek / half / full. The sheet is 72 px shorter than
 // the window so "full" stops below the brand bar; vaul measures px snaps from the top.
 const SHEET_TOP_GAP = 72
 const SNAP_POINTS: (string | number)[] = [`${148 + SHEET_TOP_GAP}px`, 0.5, 1]
@@ -51,13 +51,13 @@ watch(() => [pr.selectedId.value, pr.state.value], () => {
       <PrecedentMapView class="pr-noprint" />
     </ClientOnly>
 
-    <!-- Brand bar (where RentCheck's search sat) -->
+    <!-- Brand bar -->
     <header class="pr-noprint pointer-events-none absolute inset-x-3 top-3 z-20 lg:right-auto lg:left-4 lg:top-4 lg:w-[400px]">
       <div class="pointer-events-auto flex h-12 items-center gap-2.5 rounded-md border-2 border-ink bg-ink px-3 text-white shadow-[3px_3px_0_var(--hivis)]">
         <span class="grid size-7 place-items-center rounded bg-hivis text-ink"><Landmark class="size-4" /></span>
         <span class="font-heading text-[20px] font-black uppercase tracking-wide [font-stretch:72%]">Precedent</span>
         <span class="h-4 w-px bg-white/30" />
-        <span class="truncate font-heading text-xs font-bold uppercase tracking-wider text-hivis [font-stretch:85%]">Dublin planning decisions</span>
+        <span class="truncate font-heading text-xs font-bold uppercase tracking-wider text-hivis [font-stretch:85%]">Irish planning decisions</span>
       </div>
     </header>
 
@@ -73,7 +73,7 @@ watch(() => [pr.selectedId.value, pr.state.value], () => {
         <span v-if="desktop" class="type-caption-upper text-foreground">Council decision</span>
         <span class="flex items-center gap-1.5"><i class="size-2.5 rounded-full bg-planning-granted" /> Granted</span>
         <span class="flex items-center gap-1.5"><i class="size-2.5 rounded-full bg-planning-refused" /> Refused</span>
-        <span class="flex items-center gap-1.5"><i class="size-2.5 rounded-full bg-planning-pending" /> Pending</span>
+        <span class="flex items-center gap-1.5"><i class="size-2.5 rounded-full bg-planning-closed" /> Withdrawn or invalid</span>
         <span class="flex items-center gap-1.5"><i class="size-2.5 rounded-full ring-2 ring-planning-appealed ring-inset" /> Appealed</span>
       </div>
 

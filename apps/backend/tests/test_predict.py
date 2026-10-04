@@ -92,3 +92,20 @@ def test_response_matches_contract_field_names(client):
     body = post_predict(client, **_contract_example("Request"))
     assert body["alternatives"] and body["matches"] and len(body["delay_factors"]) == 2
     assert _shape(body) == _shape(_contract_example("Response"))
+
+
+def test_matches_carry_what_the_map_and_case_card_need(client):
+    body = post_predict(client, max_matches=8)
+    assert len(body["matches"]) == 8
+    match = body["matches"][0]
+    assert 51 < match["lat"] < 56 and -11 < match["lon"] < -5  # WGS84, inside Ireland
+    assert isinstance(match["appealed"], bool) and isinstance(match["further_information"], bool)
+    assert match["days_to_decision"] is not None and match["received_date"]
+
+
+def test_max_matches_is_bounded(client):
+    for bad in (0, 26):
+        response = client.post(
+            "/predict", json={"council": "Dublin City Council", "max_matches": bad}
+        )
+        assert response.status_code == 422

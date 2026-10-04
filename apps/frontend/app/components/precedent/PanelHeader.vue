@@ -1,7 +1,7 @@
 <script setup lang="ts">
 import { ArrowLeft } from '@lucide/vue'
 import { Button } from '@/components/ui/button'
-import TextSwap from '../report/TextSwap.vue'
+import TextSwap from './TextSwap.vue'
 
 defineProps<{ title?: string; subtitle?: string }>()
 defineEmits<{ back: [] }>()

@@ -1,14 +1,6 @@
 import type { Map as MlMap, PaddingOptions } from 'maplibre-gl'
-import type { LngLat } from '~/types/api'
 import { CAMERA, FLY_DURATION_MS, PANEL_PADDING_LEFT } from './config'
-import { boundsOf } from './geo'
-
-export interface CameraSnapshot { center: [number, number]; zoom: number; pitch: number; bearing: number }
-
-export function snapshot(map: MlMap): CameraSnapshot {
-  const c = map.getCenter()
-  return { center: [c.lng, c.lat], zoom: map.getZoom(), pitch: map.getPitch(), bearing: map.getBearing() }
-}
+import { boundsOf, type LngLat } from './geo'
 
 /** Mobile: the bottom sheet sits at half height while a property is open. */
 const mobileSheetPadding = () => Math.round((typeof window === 'undefined' ? 800 : window.innerHeight) * 0.45)
@@ -31,10 +23,6 @@ export function flyToProperty(map: MlMap, location: LngLat, opts: { desktop: boo
     duration: FLY_DURATION_MS,
     essential: true,
   })
-}
-
-export function flyToSnapshot(map: MlMap, s: CameraSnapshot) {
-  map.flyTo({ ...s, padding: { top: 0, bottom: 0, left: 0, right: 0 }, duration: FLY_DURATION_MS, essential: true })
 }
 
 /** Frame a set of points, keeping the current pitch and bearing. */
