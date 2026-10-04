@@ -25,6 +25,27 @@ The user describes a project in plain English and picks a council. The tool find
 - A two-sentence plain-English summary
 - Closest matches, each linking to the council's page for that application
 
+### Faster-site suggestion
+
+The user can drop a pin for the proposed site. The tool estimates the time to a decision there, then looks for nearby places where similar applications were decided faster, and suggests one.
+
+**Example (numbers made up):** "Your site: typical decision about 2 years (104 weeks) including further information and appeals, based on 38 similar applications within 3 km. Alternative: 12 km away, in South Dublin, typical decision about 1 year (52 weeks), based on 27 similar applications. Faster by about 52 weeks."
+
+How it works:
+
+1. Take the pin as ITM coordinates (convert from lat/lon with `pyproj`).
+2. Estimate the proposed site: median total days (decision, plus appeal where one happened) for similar applications within a radius, default 3 km, widened if fewer than 15 match.
+3. Build candidate places: a grid of centres (about 2 km apart) within the user's maximum distance, default 25 km. Compute the same estimate for each, using only candidates with 15 or more similar applications.
+4. Keep candidates that beat the proposed site by a meaningful margin (default 25% or at least 12 weeks) and rank by weeks saved, then by distance.
+5. Show the top three: distance and direction, estimated time, weeks saved, grant rate, sample size, link to example applications.
+
+It must be framed carefully:
+
+- This compares what happened to past applications in each area. It does not say a site is suitable, zoned correctly, or that a decision will be faster.
+- Grant rate must be shown next to speed. A faster area with a much lower grant rate is not a better option, so flag it.
+- Council is usually the biggest driver of timing, so most suggestions will be across a council boundary. Say so on screen.
+- Always show the sample size and warn when it is small.
+
 ## Where the data comes from
 
 - **Source:** Department of Housing, Local Government and Heritage, national planning register, layer "Planning Application Points". It merges the planning registers of participating local authorities and covers applications received since 2012.
@@ -52,6 +73,20 @@ The user describes a project in plain English and picks a council. The tool find
 - The `Decision` field has dozens of spelling variants. We map them into four groups: granted, refused, invalid, withdrawn.
 - We have confirmed the fields exist but not how completely they are filled in. This is the first thing to check.
 - The dataset includes applicant names and addresses. Drop those columns on load.
+- The faster-site suggestion needs coordinates. We have not checked how many apartment rows have valid `ITMEasting` and `ITMNorthing`. Check this early; if it is poor, compare at council level instead of by distance.
+
+### Do we need an LLM API?
+
+Not strictly. The core numbers (matching, grant rate, timings, delay factors, site comparison) are plain SQL and Python. The model is used in four places, and each has a non-LLM fallback:
+
+| Use | Needed? | Fallback without an API |
+| --- | --- | --- |
+| Tag storeys and mixed use from descriptions (prep) | Helpful, not essential | Regex for "8 storey", "eight-storey", "mixed use", "retail", "commercial". Run it first and send only the unmatched rows to a model. |
+| Parse the user's sentence (live) | Only for the plain-English demo | A form with units, storeys, mixed use and a council dropdown |
+| Write the summary (live) | No | A fixed template filled with the computed numbers. This is also safer, since it cannot invent figures. |
+| Chat box (stretch) | No | Drop it |
+
+Recommendation: keep the model for sentence parsing and for tagging the leftover descriptions, and use a template for the summary. That keeps the "describe it in plain English" demo, cuts per-query cost and latency, and means the tool still works if the API or wifi fails. Build the form first so the demo never depends on the API.
 
 ## How it works
 
@@ -69,8 +104,9 @@ The user describes a project in plain English and picks a council. The tool find
 1. **Parse:** the model turns the user's sentence into the same JSON structure.
 2. **Match:** a SQL filter finds similar applications (same council, units and storeys within a band). Widen the bands if fewer than about 20 match.
 3. **Aggregate:** grant rate, median days to decision, share with a further information request, share appealed, and the difference in days for each delay factor.
-4. **Explain:** the model writes a short summary using only the computed numbers, so it cannot invent figures.
-5. **Display:** parsed details, stats, delay factors, summary, closest matches.
+4. **Suggest (if a pin was dropped):** estimate the proposed site, scan nearby candidate places, and return up to three faster alternatives (see "Faster-site suggestion").
+5. **Explain:** a short summary written only from the computed numbers (template by default, model optional), so it cannot invent figures.
+6. **Display:** parsed details, stats, delay factors, summary, closest matches, and the faster-site suggestions on the map.
 
 ## Working concurrently
 
@@ -94,6 +130,7 @@ Each role owns a folder and does not edit another role's folder. The only shared
   app.py                   # Role 2: FastAPI app, single POST /predict endpoint
   parsing.py               # Role 2: sentence -> parsed JSON
   matching.py              # Role 2: query applications.parquet (or fake_sample.csv)
+  alternatives.py          # Role 2: faster-site search (radius stats, candidate grid, ranking)
   summary.py                # Role 2: numbers -> plain-English summary, no invented figures
   requirements.txt
 
@@ -125,9 +162,13 @@ One endpoint, `POST /predict`.
 ```json
 {
   "description": "120 apartments in an 8-storey block near Heuston Station, with ground-floor retail",
-  "council": "Dublin City Council"
+  "council": "Dublin City Council",
+  "location": { "lat": 53.3467, "lon": -6.2947 },
+  "max_distance_km": 25
 }
 ```
+
+`location` and `max_distance_km` are optional. Without `location` the response has no `site_estimate` or `alternatives` (return `null` and `[]`). `max_distance_km` defaults to 25.
 
 **Response**
 
@@ -149,6 +190,28 @@ One endpoint, `POST /predict`.
   "delay_factors": [
     { "factor": "further_information_request", "added_days": 28 },
     { "factor": "appeal", "added_days": 140 }
+  ],
+  "site_estimate": {
+    "radius_km": 3,
+    "n_similar": 38,
+    "median_total_days": 728,
+    "grant_rate": 0.66
+  },
+  "alternatives": [
+    {
+      "label": "Near Clondalkin, South Dublin",
+      "council": "South Dublin County Council",
+      "lat": 53.32,
+      "lon": -6.39,
+      "distance_km": 12,
+      "direction": "W",
+      "radius_km": 3,
+      "n_similar": 27,
+      "median_total_days": 364,
+      "grant_rate": 0.72,
+      "weeks_saved": 52,
+      "warnings": []
+    }
   ],
   "summary": "Two plain-English sentences, generated only from the numbers above.",
   "matches": [
@@ -191,6 +254,9 @@ One table, one row per planning application. Role 2 writes `matching.py` against
 | `appealed` | bool | |
 | `appeal_added_days` | int or null | |
 | `link` | string | URL to the council's page for that application |
+| `itm_easting` | float or null | from `ITMEasting`, needed for the faster-site suggestion |
+| `itm_northing` | float or null | from `ITMNorthing` |
+| `total_days` | int or null | `days_to_decision` plus `appeal_added_days` where appealed; the figure used for site comparison |
 
 If a column name or type changes, update `data/schema.md` and `CONTRACT.md` together in the same message to the team — they describe the same numbers at two different stages of the pipeline.
 
@@ -205,6 +271,7 @@ Owns the prep pipeline. This is the critical path, so it starts first.
 - Normalise decisions and compute timings
 - Run the tagging job
 - Produce the delay factor numbers
+- Keep `itm_easting`, `itm_northing` and `total_days`, and report how many apartment rows have valid coordinates
 - Pick three demo examples that return good results
 - Replace `fake_sample.csv` with the real `applications.parquet` once ready, keeping the same columns
 
@@ -216,6 +283,7 @@ Owns the prompts and the single endpoint the front end calls.
 - Matching query and aggregation
 - Summary prompt that uses only computed numbers
 - Fallback behaviour when few applications match
+- Faster-site search in `alternatives.py`: radius stats, candidate grid, ranking, warnings
 
 ### Role 3: front end and demo
 
@@ -223,6 +291,7 @@ Owns the screen and the presentation.
 
 - Build the single screen against mock JSON, then connect to the real endpoint
 - Input form, stats cards, delay factors, closest matches with links
+- Map with a draggable pin and the suggested alternatives, plus a "your site vs alternative" card
 - Record a backup video of the working demo
 - Rehearse and deliver the pitch
 
@@ -234,21 +303,22 @@ Owns the screen and the presentation.
 | 12:30 to 13:00 | Normalise decisions, compute timings | Test parsing on 20 descriptions   | Input form and stats cards   |
 | 13:00 to 13:30 | Lunch (tagging job running)          | Lunch                             | Lunch                        |
 | 13:30 to 14:30 | Finish tagging, save the table       | Matching and aggregation endpoint | Closest matches list         |
-| 14:30 to 15:15 | Delay factor numbers                 | Summary prompt                    | Connect to the real endpoint |
+| 14:30 to 15:15 | Delay factor numbers, coordinate check | Faster-site search, summary template | Pin and alternatives on the map, connect to the real endpoint |
 | 15:15 to 15:45 | Choose demo examples                 | Bug fixes and fallbacks           | Polish, record backup video  |
 | 15:45 to 16:00 | Submit                               | Submit                            | Rehearse the pitch           |
 
-**Go or no-go at 12:30.** If fill rates are poor, narrow to Dublin's four councils or match on units only and drop storeys.
+**Go or no-go at 12:30.** If fill rates are poor, narrow to Dublin's four councils or match on units only and drop storeys. If coordinates are mostly missing, make the faster-site suggestion a council-level comparison instead of a distance search.
 
 ## Build order
 
 1. Similar applications and grant rate
 2. Predicted time to decision
 3. Delay factors with days lost
-4. Chat box over the results (if time allows)
-5. Compliance check against the 2025 apartment standards (stretch goal only)
+4. Faster-site suggestion from a dropped pin
+5. Chat box over the results (if time allows)
+6. Compliance check against the 2025 apartment standards (stretch goal only)
 
-Steps 1 to 3 are one pipeline and make a complete demo on their own.
+Steps 1 to 3 are one pipeline and make a complete demo on their own. Step 4 is the best second demo moment, so build it before the chat box. If it is not working by 15:15, cut it and keep the rest.
 
 ## Presenting it
 
@@ -256,6 +326,7 @@ Steps 1 to 3 are one pipeline and make a complete demo on their own.
 - Word the delay figures as comparisons ("similar applications without a further information request were decided N weeks faster"), not as proof of cause.
 - In the demo, type a tested example live, then click through to one real application on the council's site.
 - Only quote numbers the tool actually produced.
+- For the faster-site suggestion, say "similar applications in this area were decided faster", never "you will get permission faster". Show grant rate and sample size alongside it.
 - Keep the processed data local and have the backup video ready in case the wifi fails.
 
 ## Before the day
