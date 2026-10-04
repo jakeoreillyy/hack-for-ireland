@@ -3,9 +3,11 @@ bands with enough matches to be credible, and some variance in outcome so
 the demo doesn't look scripted. Prints a ranked shortlist — run it, then
 hand-pick 3 and write them up in data/demo_examples.md.
 
-This also doubles as a reference implementation of the matching/aggregation
-logic in the plan, computed directly against the real table, so Role 2 has
-known-correct numbers to check matching.py against.
+NOTE: this uses a simplified fixed-band match (no progressive widening), so
+its stats will NOT match apps/backend's actual /predict output — its matcher
+(services/matching.py) widens through several band tiers and is the correct
+one. Use this script only to shortlist candidates; get the real numbers from
+the running backend before writing them into data/demo_examples.md.
 
     python data/pick_demo_examples.py
 """

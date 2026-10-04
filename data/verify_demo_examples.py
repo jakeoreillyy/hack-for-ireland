@@ -1,12 +1,14 @@
-"""Checks that data/demo_examples.md still tells the truth.
+"""Checks that the links in data/demo_examples.md are still live.
 
-Two things can go stale: the numbers (if applications.parquet is regenerated
-from a refreshed source) and the links (if a council's e-planning system
-moves a page). This re-derives the three examples' stats from the real table
-and re-checks the stats are what's written in demo_examples.md, then pings
-every "closest match" link to confirm it still resolves.
-
-Run before you rehearse, and again right before the demo if there's time:
+This used to also re-derive and check the stats in demo_examples.md, using
+the matching logic in pick_demo_examples.py. That stopped being meaningful
+once apps/backend existed: its matcher (progressive band-widening, see
+services/matching.py) is the real, correct one, and doesn't agree with
+pick_demo_examples.py's simpler fixed-band version. demo_examples.md is now
+generated from the backend's actual /predict output, so the backend's own
+test suite (apps/backend/tests) is what verifies the stats — this script
+only checks the one thing specific to the data layer: do the closest-match
+links still resolve.
 
     python data/verify_demo_examples.py
 """
@@ -16,65 +18,48 @@ from __future__ import annotations
 import subprocess
 import sys
 
-import pandas as pd
-
-from pick_demo_examples import match, summarise
-
-# (council, units, storeys, expected stats, [(id, link), ...])
-# Expected values are what's written in demo_examples.md — kept in sync by hand.
+# (council, [(id, link), ...]) — kept in sync with data/demo_examples.md by hand.
 EXAMPLES = [
     (
-        "South Dublin County Council", 150, 10,
-        {"n_decided": 78, "grant_rate": 0.83, "median_weeks": 7.3},
+        "South Dublin County Council",
         [
-            ("SHD3ABP-312430-22", "https://planning.agileapplications.ie/southdublin/application-details/61773"),
-            ("SD26A/0184W", "https://planning.agileapplications.ie/southdublin/application-details/70736"),
-            ("SDZ21A/0007", "https://planning.agileapplications.ie/southdublin/application-details/60624"),
+            ("S01A/0114", "https://planning.agileapplications.ie/southdublin/application-details/15357"),
+            ("SDZ19A/0008", "https://planning.agileapplications.ie/southdublin/application-details/57034"),
+            ("SDZ19A/0007", "https://planning.agileapplications.ie/southdublin/application-details/57033"),
+            ("SD04A/0160", "https://planning.agileapplications.ie/southdublin/application-details/22552"),
+            ("SD03A/0966", "https://planning.agileapplications.ie/southdublin/application-details/22081"),
         ],
     ),
     (
-        "Kildare County Council", 90, 6,
-        {"n_decided": 20, "grant_rate": 0.75, "median_weeks": 32.4},
+        "Kildare County Council",
         [
-            ("211606", "http://www.eplanning.ie/KildareCC/AppFileRefDetails/211606/0"),
-            ("2560988", "http://www.eplanning.ie/KildareCC/AppFileRefDetails/2560988/0"),
-            ("18301818", "http://www.eplanning.ie/KildareCC/AppFileRefDetails/18301818/0"),
+            ("21311040", "http://www.eplanning.ie/KildareCC/AppFileRefDetails/21311040/0"),
+            ("20307013", "http://www.eplanning.ie/KildareCC/AppFileRefDetails/20307013/0"),
+            ("181481", "http://www.eplanning.ie/KildareCC/AppFileRefDetails/181481/0"),
+            ("22599", "http://www.eplanning.ie/KildareCC/AppFileRefDetails/22599/0"),
+            ("2460371", "http://www.eplanning.ie/KildareCC/AppFileRefDetails/2460371/0"),
         ],
     ),
     (
-        "Louth County Council", 60, 5,
-        {"n_decided": 31, "grant_rate": 0.81, "median_weeks": 23.0},
+        "Louth County Council",
         [
             ("201086", "http://www.eplanning.ie/LouthCC/AppFileRefDetails/201086/0"),
             ("211344", "http://www.eplanning.ie/LouthCC/AppFileRefDetails/211344/0"),
             ("2360494", "http://www.eplanning.ie/LouthCC/AppFileRefDetails/2360494/0"),
+            ("211212", "http://www.eplanning.ie/LouthCC/AppFileRefDetails/211212/0"),
+            ("2460772", "http://www.eplanning.ie/LouthCC/AppFileRefDetails/2460772/0"),
         ],
     ),
 ]
 
 
-def check_stats(df: pd.DataFrame) -> bool:
-    ok = True
-    for council, units, storeys, expected, _ in EXAMPLES:
-        actual = summarise(match(df, council, units, storeys))
-        for key, expected_value in expected.items():
-            actual_value = actual.get(key)
-            if actual_value != expected_value:
-                ok = False
-                print(f"STALE  {council} {units}u/{storeys}s: {key} is now {actual_value}, "
-                      f"demo_examples.md says {expected_value}")
-        if ok:
-            print(f"ok     {council} {units}u/{storeys}s stats match demo_examples.md")
-    return ok
-
-
 def check_links() -> bool:
-    # Shells out to curl rather than using `requests`: at least one council's
-    # e-planning server (IIS, old-style TLS/HTTP negotiation) resets every
-    # connection from Python's urllib3 but serves curl — and a browser
+    # Shells out to curl rather than using `requests`: Kildare's and Louth's
+    # e-planning server (old IIS, TLS/HTTP negotiation) resets every
+    # connection from Python's urllib3 but serves curl fine — and a browser
     # behaves like curl here, which is what actually matters for the demo.
     ok = True
-    for council, _, _, _, matches in EXAMPLES:
+    for council, matches in EXAMPLES:
         for app_id, link in matches:
             try:
                 result = subprocess.run(
@@ -95,17 +80,13 @@ def check_links() -> bool:
 
 
 def main() -> None:
-    df = pd.read_parquet("data/applications.parquet")
-    print("--- checking stats against demo_examples.md ---")
-    stats_ok = check_stats(df)
-    print("\n--- checking links are live ---")
-    links_ok = check_links()
-
-    print()
-    if stats_ok and links_ok:
-        print("All good — demo_examples.md is accurate and every link resolves.")
+    print("--- checking demo_examples.md links are live ---")
+    if check_links():
+        print("\nAll good — every link resolves.")
+        print("Note: stats aren't checked here — run apps/backend's own test suite,")
+        print("or POST the three inputs to a running /predict and compare by eye.")
     else:
-        print("Something's stale — see above. Update demo_examples.md or swap the broken link.")
+        print("\nSomething's dead — see above. Update demo_examples.md with a working match.")
         sys.exit(1)
 
 
