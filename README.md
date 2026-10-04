@@ -58,4 +58,5 @@ pytest && ruff check .
 
 - Settings come from `apps/backend/.env` and environment variables; every tunable is in `config.py`. Tests ignore `.env`, so they never call the real API.
 - Claude is optional: with no `ANTHROPIC_API_KEY` the description is read by regex only. A form can skip parsing by sending `parsed_override`.
+- `python scripts/check_parsing.py` scores the description parser on sample descriptions; add `--llm` to include Claude (calls the API with your key).
 - Data is read from `data/applications.parquet`, falling back to `data/fake_sample.csv`. The server refuses to start if neither exists or a required column is missing.

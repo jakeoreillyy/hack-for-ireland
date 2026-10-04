@@ -146,7 +146,8 @@ def parse_description(
             spec = ProjectSpec(
                 units=llm_spec.units or spec.units,
                 storeys=llm_spec.storeys or spec.storeys,
-                mixed_use=llm_spec.mixed_use or spec.mixed_use,
+                # Always given, and unlike regex it can tell "offices converted to homes" apart.
+                mixed_use=llm_spec.mixed_use,
             )
         except Exception:
             logger.warning("LLM parsing failed; using regex result", exc_info=True)

@@ -79,6 +79,14 @@ def test_llm_values_win_when_it_runs(settings, monkeypatch):
     assert (spec.units, spec.storeys) == (120, None) and warnings == []
 
 
+def test_llm_can_overrule_a_regex_mixed_use_match(settings, monkeypatch):
+    settings.anthropic_api_key = "test"
+    _fake_llm(monkeypatch, ProjectSpec(units=18, mixed_use=False))
+    text = "Change of use of offices to 18 residential units"  # regex sees "offices"
+    spec, _ = parsing.parse_description(text, None, settings)
+    assert spec.mixed_use is False
+
+
 @pytest.mark.parametrize("description", ["120 apartments in an 8 storey block", "   "])
 def test_llm_is_skipped_when_regex_is_complete_or_text_is_blank(settings, monkeypatch, description):
     settings.anthropic_api_key = "test"

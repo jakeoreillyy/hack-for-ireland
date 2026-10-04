@@ -5,6 +5,7 @@ from fastapi.testclient import TestClient
 
 from planning_predictor.config import REPO_ROOT, Settings
 from planning_predictor.main import create_app
+from planning_predictor.services import parsing
 
 DUBLIN_CENTRE = {"lat": 53.3467, "lon": -6.2947}
 CONTRACT = REPO_ROOT / "CONTRACT.md"
@@ -39,6 +40,17 @@ def test_route_uses_the_settings_given_to_create_app(applications):
     with TestClient(create_app(settings, applications)) as client:
         body = post_predict(client)
     assert any(w.startswith("Small sample") for w in body["warnings"])
+
+
+def test_claude_failure_still_returns_a_prediction(applications, monkeypatch):
+    def unavailable(*_args, **_kwargs):
+        raise RuntimeError("api down")
+
+    monkeypatch.setattr(parsing, "parse_with_llm", unavailable)
+    settings = Settings(_env_file=None, anthropic_api_key="test")
+    with TestClient(create_app(settings, applications)) as client:
+        body = post_predict(client, description="a large block of flats")
+    assert any("Language model unavailable" in w for w in body["warnings"])
 
 
 def test_invalid_input_is_rejected(client):
