@@ -22,8 +22,8 @@ predictor above.
 
 ```
 /data       Role 1 — data pipeline (done, see below)
-/backend    Role 2 — FastAPI /predict endpoint
-/frontend   Role 3 — screen, map, demo
+/apps/backend   Role 2 — FastAPI /predict endpoint (see "Backend" below)
+/apps/frontend  Role 3 — screen, map, demo
 CONTRACT.md, data/schema.md   shared, frozen contracts — see "Working concurrently" in the plan
 ```
 
@@ -41,8 +41,6 @@ python3 data/verify_demo_examples.py   # confirms demo_examples.md numbers + lin
 `applications.parquet`/`.csv` are gitignored (regenerate with `prep.py`,
 takes ~20–30s). `data/fake_sample.csv` has the same columns for testing
 before the real file exists.
-
-Planning permission predictor: see `planning-predictor-plan.md` for the idea and `CONTRACT.md` for the API.
 
 ## Backend (`apps/backend`)
 

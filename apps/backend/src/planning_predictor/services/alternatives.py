@@ -80,6 +80,20 @@ class _AreaIndex:
         )
 
 
+@dataclass(frozen=True)
+class _Candidate:
+    """A grid cell that beats the pin's site, `dx`/`dy` metres east/north of the pin."""
+
+    dx: float
+    dy: float
+    weeks_saved: int
+    area: _AreaStats
+
+    @property
+    def distance_m(self) -> float:
+        return math.hypot(self.dx, self.dy)
+
+
 def find_faster_sites(
     similar_all_councils: pd.DataFrame,
     lat: float,
@@ -92,57 +106,70 @@ def find_faster_sites(
     if len(index) == 0:
         return SiteComparison(None, [], ["No coordinates available for similar applications."])
 
-    x0, y0 = _WGS84_TO_ITM.transform(lon, lat)
-    site = index.stats_around(x0, y0, settings.site_max_radius_km)
+    origin = _WGS84_TO_ITM.transform(lon, lat)
+    site = index.stats_around(*origin, settings.site_max_radius_km)
     if site is None:
         return SiteComparison(None, [], ["No decided similar applications near this site."])
 
     warnings = []
     if site.n_similar < settings.small_sample:
         warnings.append(f"Small sample at your site: only {site.n_similar} similar applications.")
+
+    candidates = _faster_candidates(index, site, origin, max_distance_km, settings)
+    alternatives = [
+        _to_alternative(candidate, site, origin, settings)
+        for candidate in _spaced_out(candidates, settings)
+    ]
+    if not alternatives:
+        warnings.append("No nearby area with a meaningfully faster decision time was found.")
+    site_estimate = SiteEstimate(
+        radius_km=site.radius_km,
+        n_similar=site.n_similar,
+        median_total_days=site.median_total_days,
+        grant_rate=site.grant_rate,
+    )
+    return SiteComparison(site_estimate, alternatives, warnings)
+
+
+def _faster_candidates(
+    index: _AreaIndex,
+    site: _AreaStats,
+    origin: tuple[float, float],
+    max_distance_km: float,
+    settings: Settings,
+) -> list[_Candidate]:
+    """Grid cells with enough applications that beat the site by the required margin, best first."""
     required_days = max(
         settings.site_margin_ratio * site.median_total_days,
         settings.site_margin_weeks * _DAYS_PER_WEEK,
     )
-
     candidates = []
     for dx, dy in _grid_offsets(max_distance_km, settings.site_grid_spacing_km):
         # No widening here: the area's stats must come from applications close to the point.
-        area = index.stats_around(x0 + dx, y0 + dy, settings.site_radius_km)
+        area = index.stats_around(origin[0] + dx, origin[1] + dy, settings.site_radius_km)
         if area is None or area.n_similar < settings.site_min_sample:
             continue
         days_saved = site.median_total_days - area.median_total_days
         if days_saved >= required_days:
             weeks_saved = round(days_saved / _DAYS_PER_WEEK)
-            candidates.append((weeks_saved, math.hypot(dx, dy), dx, dy, area))
+            candidates.append(_Candidate(dx, dy, weeks_saved, area))
     # Most weeks saved first, then the nearest, so a few days of noise can't outrank distance.
-    candidates.sort(key=lambda c: (-c[0], c[1]))
+    return sorted(candidates, key=lambda c: (-c.weeks_saved, c.distance_m))
 
-    chosen: list[Alternative] = []
-    chosen_offsets: list[tuple[float, float]] = []
+
+def _spaced_out(candidates: list[_Candidate], settings: Settings) -> list[_Candidate]:
+    """The best candidates, skipping any too close to one already chosen."""
     min_separation_m = settings.site_min_separation_km * _METRES_PER_KM
-    for weeks_saved, distance_m, dx, dy, area in candidates:
-        if any(math.hypot(dx - ox, dy - oy) < min_separation_m for ox, oy in chosen_offsets):
-            continue
-        chosen.append(
-            _to_alternative(weeks_saved, distance_m, dx, dy, area, site, x0, y0, settings)
-        )
-        chosen_offsets.append((dx, dy))
-        if len(chosen) == settings.site_max_results:
-            break
-
-    if not chosen:
-        warnings.append("No nearby area with a meaningfully faster decision time was found.")
-    return SiteComparison(
-        SiteEstimate(
-            radius_km=site.radius_km,
-            n_similar=site.n_similar,
-            median_total_days=site.median_total_days,
-            grant_rate=site.grant_rate,
-        ),
-        chosen,
-        warnings,
-    )
+    chosen: list[_Candidate] = []
+    for candidate in candidates:
+        if all(
+            math.hypot(candidate.dx - other.dx, candidate.dy - other.dy) >= min_separation_m
+            for other in chosen
+        ):
+            chosen.append(candidate)
+            if len(chosen) == settings.site_max_results:
+                break
+    return chosen
 
 
 def _grid_offsets(max_distance_km: float, spacing_km: float) -> list[tuple[float, float]]:
@@ -156,19 +183,12 @@ def _grid_offsets(max_distance_km: float, spacing_km: float) -> list[tuple[float
 
 
 def _to_alternative(
-    weeks_saved: int,
-    distance_m: float,
-    dx: float,
-    dy: float,
-    area: _AreaStats,
-    site: _AreaStats,
-    x0: float,
-    y0: float,
-    settings: Settings,
+    candidate: _Candidate, site: _AreaStats, origin: tuple[float, float], settings: Settings
 ) -> Alternative:
-    lon, lat = _ITM_TO_WGS84.transform(x0 + dx, y0 + dy)
-    distance_km = round(distance_m / _METRES_PER_KM)
-    direction = _compass_direction(dx, dy)
+    area = candidate.area
+    lon, lat = _ITM_TO_WGS84.transform(origin[0] + candidate.dx, origin[1] + candidate.dy)
+    distance_km = round(candidate.distance_m / _METRES_PER_KM)
+    direction = _compass_direction(candidate.dx, candidate.dy)
     warnings = []
     if area.council != site.council:
         warnings.append("Different council area: timing differences are mostly a council effect.")
@@ -185,6 +205,6 @@ def _to_alternative(
         n_similar=area.n_similar,
         median_total_days=area.median_total_days,
         grant_rate=area.grant_rate,
-        weeks_saved=weeks_saved,
+        weeks_saved=candidate.weeks_saved,
         warnings=warnings,
     )
