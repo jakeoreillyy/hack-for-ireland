@@ -1,0 +1,11 @@
+id,council,address,units,storeys,mixed_use,decision,received_date,decision_date,days_to_decision,fi_requested,fi_added_days,appealed,appeal_added_days,link,itm_easting,itm_northing,total_days
+DCC-2021-0001,Dublin City Council,"Heuston Place, Dublin 8",120,8,True,granted,2021-03-01,2021-07-14,135,True,28,False,,https://planning.dublincity.ie/DCC-2021-0001,714900,733800,135
+DCC-2021-0002,Dublin City Council,"North Circular Road, Dublin 7",64,6,False,refused,2021-04-10,2021-06-02,53,False,,False,,https://planning.dublincity.ie/DCC-2021-0002,715500,735200,53
+SDCC-2020-0145,South Dublin County Council,"Clondalkin Village, Dublin 22",88,4,False,granted,2020-09-15,2021-05-20,247,True,35,True,140,https://planning.sdublincoco.ie/SDCC-2020-0145,699200,727400,387
+CCC-2019-0310,Cork City Council,"Blackpool, Cork",45,,False,withdrawn,2019-11-02,,,False,,False,,https://planning.corkcity.ie/CCC-2019-0310,566800,572100,
+FCC-2022-0087,Fingal County Council,"Swords Road, Dublin 9",150,10,True,granted,2022-01-20,2022-04-28,98,False,,False,,https://planning.fingal.ie/FCC-2022-0087,720100,742600,98
+DCC-2021-0233,Dublin City Council,"Thomas Street, Dublin 8",30,,False,invalid,2021-06-05,2021-06-12,7,False,,False,,https://planning.dublincity.ie/DCC-2021-0233,714200,733500,7
+GCC-2020-0054,Galway City Council,"Renmore, Galway",22,3,False,granted,2020-02-11,2020-05-19,98,False,,False,,https://planning.galwaycity.ie/GCC-2020-0054,429100,724500,98
+SDCC-2021-0199,South Dublin County Council,"Tallaght Village, Dublin 24",76,5,True,refused,2021-08-01,2021-12-15,136,True,21,True,112,https://planning.sdublincoco.ie/SDCC-2021-0199,708900,724100,248
+DCC-2022-0061,Dublin City Council,"East Wall, Dublin 3",112,8,True,granted,2022-02-14,2022-06-30,136,True,42,False,,https://planning.dublincity.ie/DCC-2022-0061,,,136
+CCC-2021-0420,Cork City Council,"Victoria Cross, Cork",60,8,True,granted,2021-01-05,2021-09-02,240,True,98,False,,https://planning.corkcity.ie/CCC-2021-0420,567300,571800,240
